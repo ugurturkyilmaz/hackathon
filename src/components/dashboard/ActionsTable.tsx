@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty } from "@/components/ui/Empty";
 import { Select } from "@/components/ui/Input";
 import { CATEGORY_META } from "@/lib/utils/constants";
+import { deadlineMeta } from "@/lib/utils/deadline";
 import type { ActionStatus, ActionWithContext } from "@/types";
 
 interface Props {
@@ -78,8 +79,17 @@ export function ActionsTable({ actions, canMarkDone, onMarkDone }: Props) {
               {filtered.map((a) => {
                 const cat = a.card?.category;
                 const meta = cat ? CATEGORY_META[cat] : null;
+                const dl = deadlineMeta(a.deadline, a.status);
+                const isOverdue = dl.state === "overdue";
                 return (
-                  <tr key={a.id} className="hover:bg-gray-50">
+                  <tr
+                    key={a.id}
+                    className={
+                      isOverdue
+                        ? "bg-red-50 border-l-4 border-red-500 hover:bg-red-100"
+                        : "hover:bg-gray-50"
+                    }
+                  >
                     <td className="px-4 py-3 max-w-xs">
                       {a.group ? (
                         <div className="flex flex-col gap-0.5">

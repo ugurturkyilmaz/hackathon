@@ -1,10 +1,8 @@
 // Standalone seeder. Initializes/migrates the SQLite DB and inserts the
-// canonical demo users. Safe to run repeatedly; wipes existing data.
+// canonical demo state: 9 users + Falcon Team + 1 finished retro with
+// 2 overdue actions.
 //
 //   npm run seed
-//
-// Mirrors the schema in src/lib/db/client.ts so it works without the
-// Next.js app being running.
 
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
@@ -89,14 +87,77 @@ db.exec(`
   DELETE FROM users;
 `);
 
-// --- seed ---
-const insert = db.prepare(`INSERT INTO users (id, name, role) VALUES (?, ?, ?)`);
-const add = (name, role) => insert.run(randomUUID(), name, role);
+// --- seed users ---
+const insertUser = db.prepare(`INSERT INTO users (id, name, role) VALUES (?, ?, ?)`);
+const userIds = {};
+const add = (name, role) => {
+  const id = randomUUID();
+  insertUser.run(id, name, role);
+  userIds[name] = id;
+};
 
 add("admin", "admin");
 ["Kaan", "Batuhan", "Çağrı"].forEach((n) => add(n, "manager"));
 add("Erhan", "scrum_master");
 ["Kübra", "Zeynep", "Anıl", "Uğur"].forEach((n) => add(n, "member"));
 
-const total = db.prepare(`SELECT COUNT(*) AS n FROM users`).get().n;
-console.log(`✅ Seed complete — ${total} users inserted at ${DB_PATH}`);
+// --- seed team ---
+const teamId = randomUUID();
+db.prepare(`INSERT INTO teams (id, name, scrum_master_id) VALUES (?, ?, ?)`).run(
+  teamId,
+  "Falcon Team",
+  userIds["Erhan"],
+);
+const setTeam = db.prepare(`UPDATE users SET team_id = ? WHERE name = ?`);
+["Erhan", "Kübra", "Zeynep", "Anıl", "Uğur"].forEach((n) => setTeam.run(teamId, n));
+
+// --- seed previous retro (finished) ---
+const sessionId = randomUUID();
+const previousRetroDate = new Date();
+previousRetroDate.setDate(previousRetroDate.getDate() - 14); // 2 hafta önce
+db.prepare(
+  `INSERT INTO retro_sessions
+     (id, name, status, vote_limit, writing_minutes, writing_ends_at, team_id, created_by, created_at)
+   VALUES (?, ?, 'finished', 3, 5, NULL, ?, ?, ?)`,
+).run(sessionId, "Sprint 11 Retro", teamId, userIds["Erhan"], previousRetroDate.toISOString());
+
+// --- cards ---
+const insertCard = db.prepare(
+  `INSERT INTO cards (id, session_id, text, category, votes, user_id) VALUES (?, ?, ?, ?, ?, ?)`,
+);
+const gladId = randomUUID();
+const madZeynepId = randomUUID();
+const madUgurId = randomUUID();
+insertCard.run(gladId, sessionId, "ekip içi iletişim güzel", "glad", 4, userIds["Anıl"]);
+insertCard.run(madZeynepId, sessionId, "Zeynep'in task'ları geç bitiyor", "mad", 3, userIds["Kübra"]);
+insertCard.run(madUgurId, sessionId, "Uğur dailylere katılmıyor", "mad", 3, userIds["Erhan"]);
+
+// --- overdue actions ---
+const overdueDate = new Date();
+overdueDate.setDate(overdueDate.getDate() - 5); // 5 gün önce vade
+const overdueStr = overdueDate.toISOString().slice(0, 10);
+
+const insertAction = db.prepare(
+  `INSERT INTO actions (id, card_id, assigned_to, description, status, deadline) VALUES (?, ?, ?, ?, 'open', ?)`,
+);
+insertAction.run(
+  randomUUID(),
+  madZeynepId,
+  userIds["Zeynep"],
+  "Zeynep 2 task'ını geciktirdi",
+  overdueStr,
+);
+insertAction.run(
+  randomUUID(),
+  madUgurId,
+  userIds["Uğur"],
+  "Uğur dailylere katılmıyor",
+  overdueStr,
+);
+
+const userTotal = db.prepare(`SELECT COUNT(*) AS n FROM users`).get().n;
+const sessTotal = db.prepare(`SELECT COUNT(*) AS n FROM retro_sessions`).get().n;
+const actTotal = db.prepare(`SELECT COUNT(*) AS n FROM actions`).get().n;
+console.log(
+  `✅ Seed complete — ${userTotal} users, 1 team (Falcon Team), ${sessTotal} retro, ${actTotal} action(s) at ${DB_PATH}`,
+);
