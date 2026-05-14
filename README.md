@@ -2,9 +2,11 @@
 
 > Ekiplerin retrospektif toplantılarını dijital olarak yönettiği, alınan aksiyon maddelerinin sprintten sprinte takip edildiği MVP.
 
-**Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS · **SQLite (better-sqlite3)** · **Server-Sent Events**
+**Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS · **SQLite (better-sqlite3)** · **Server-Sent Events** · **Groq AI**
 
 > ⚠️ Bu repo başlangıçta Supabase ile yazıldı, sonradan **local SQLite + Next.js Route Handlers + SSE**'ye taşındı. Vercel/serverless'te çalışmaz; localhost demo'su için.
+
+**☁️ Deploy URL:** _Yok_ — `better-sqlite3` filesystem'e yazıyor; serverless ortamlarda çalışmaz. Localhost'ta `npm run dev` ile çalıştırılır. (Production hedeflenirse libsql/Turso veya managed Postgres'e taşıma gerekir.)
 
 ---
 
@@ -42,13 +44,19 @@ Ekipler retrospektif toplantılarını dış platformlarda yapıyor; alınan aks
 # 1. Bağımlılıklar (Node 20+; better-sqlite3 native binding için)
 npm install
 
-# 2. DB'yi sıfırla ve demo kullanıcıları yükle
+# 2. Environment değişkenleri (Groq API key için — opsiyonel ama AI Analiz butonu için gerekli)
+cp .env.example .env.local
+# .env.local içine GROQ_API_KEY=gsk_... yaz (https://console.groq.com/keys)
+
+# 3. DB'yi sıfırla ve demo kullanıcıları + örnek retroyu yükle
 npm run seed
 
-# 3. Geliştirme sunucusu
+# 4. Geliştirme sunucusu
 npm run dev
 # → http://localhost:3000
 ```
+
+> 📋 [`.env.example`](.env.example) dosyası gerekli env değişkenlerini placeholder ile listeler.
 
 İlk açılışta **isim + rol seçim** ekranı çıkar. Aşağıdaki demo isimlerinden biriyle gir:
 
@@ -182,16 +190,70 @@ Her API route mutasyon yaptığında `publish(topic, payload)` çağırır. SSE 
 
 ---
 
+## 🤖 Geliştirmede Kullanılan AI Araçları
+
+| Aşama | Araç / Model | Çıktı |
+|---|---|---|
+| **Planlama, dokümantasyon** | **Google Gemini** | `docs/00-PLAN.md`, `docs/02-PHASES.md`, `docs/03-TASKS.md`, `docs/04-DATABASE.md` |
+| **Skill & Agent profilleri** | **Claude Opus 4.7 (1M context)** | `docs/*-agent.md`, `docs/skills/*/SKILL.md` |
+| **Kod üretimi & refactor** | **Claude Code (Sonnet 4.5 / Opus 4.7)** | `src/**` tüm uygulama kodu |
+| **Runtime aksiyon analizi** | **Groq · `llama-3.1-8b-instant`** | Manager dashboard'undaki "Analiz Et" çıktısı |
+
+Tüm AI-destekli commit'ler `Co-Authored-By: Claude Opus 4.7 (1M context)` trailer'ı ile imzalanmıştır. `git log --grep="Co-Authored-By: Claude"` ile gözlenebilir.
+
+Detaylı AI iş akışı: [`docs/AI-WORKFLOW.md`](docs/AI-WORKFLOW.md).
+Top-level Claude yönergesi: [`CLAUDE.md`](CLAUDE.md).
+
+---
+
+## 🔌 MCP (Model Context Protocol) Server'ları
+
+| MCP | Image / Source | Kullanım |
+|---|---|---|
+| **github-mcp-server** | `ghcr.io/github/github-mcp-server` (Docker) | Repo push, branch/file yönetimi, PR oluşturma. Claude Code içinden Anthropic'in MCP entegrasyonu üzerinden çağrıldı. |
+
+MCP yapılandırma dosyası lokal: `~/Library/Application Support/Claude/claude_desktop_config.json` (token içerir, repo'ya commit edilmez).
+
+---
+
+## 🌐 Entegre Edilen API'ler
+
+| API | Endpoint | Amaç |
+|---|---|---|
+| **Groq Chat Completions** | `https://api.groq.com/openai/v1/chat/completions` | Manager dashboard'unda açık aksiyonların AI özetini almak |
+| **GitHub REST API** (MCP üzerinden) | `https://api.github.com` | Repo push, dosya commit'leri (sadece geliştirme zamanı) |
+
+Groq integration kodu: [`src/app/api/analyze/route.ts`](src/app/api/analyze/route.ts).
+
+---
+
+## 📸 Ekran Görüntüleri
+
+> Demo sırasında çekilen ekran görüntüleri için `docs/screenshots/` klasörü ayrılmıştır. (Hackathon sunumu sırasında doldurulacak.)
+
+Önerilen ekranlar:
+- 🎬 Login + rol seçim
+- 🎬 Admin → Ekipler (Falcon Team yönetimi)
+- 🎬 Retro board — yazma fazı (blurred kartlar + ⏱ sayaç)
+- 🎬 Retro board — voting + finished + grouping
+- 🎬 Manager dashboard — kırmızı çerçeveli gecikmiş aksiyonlar
+- 🎬 AI Analiz paneli (Groq çıktısı)
+- 🎬 🔔 Deadline uyarı popup'ı
+
+---
+
 ## 📚 Dokümantasyon
 
 Plan ve mimari detayları için `docs/` klasörüne bakın:
 
-- [`00-PLAN.md`](docs/00-PLAN.md), [`01-ARCHITECTURE.md`](docs/01-ARCHITECTURE.md), [`02-PHASES.md`](docs/02-PHASES.md), [`03-TASKS.md`](docs/03-TASKS.md)
+- [`00-PLAN.md`](docs/00-PLAN.md), [`01-ARCHITECTURE.md`](docs/01-ARCHITECTURE.md), [`02-PHASES.md`](docs/02-PHASES.md), [`03-TASKS.md`](docs/03-TASKS.md) — **Gemini ile üretilen** planlama dokümanları
 - [`04-DATABASE.md`](docs/04-DATABASE.md) — orijinal Supabase şeması (geçişten önceki)
 - [`05-DEPLOYMENT.md`](docs/05-DEPLOYMENT.md), [`06-TECH-STACK.md`](docs/06-TECH-STACK.md)
-- [`CHANGELOG.md`](docs/CHANGELOG.md) — Hackathon sırasında yapılan değişikliklerin tarihçesi
-- `docs/skills/` — Reusable skill kütüphanesi
-- `docs/*-agent.md` — Rol bazlı AI agent profilleri
+- [`AI-WORKFLOW.md`](docs/AI-WORKFLOW.md) — **AI-destekli geliştirme süreci** (jüri için)
+- [`CHANGELOG.md`](docs/CHANGELOG.md) — Hackathon sürüm geçmişi (v0.1 → v0.7)
+- [`docs/skills/`](docs/skills/) — **Opus 4.7 ile üretilen** reusable skill kütüphanesi (4 skill)
+- [`docs/*-agent.md`](docs/) — **Opus 4.7 ile üretilen** rol bazlı agent profilleri (5 agent)
+- Root: [`CLAUDE.md`](CLAUDE.md) — Claude Code için top-level kod yönergesi
 
 ---
 
