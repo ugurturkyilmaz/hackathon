@@ -11,7 +11,7 @@ export default function Home() {
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}
     >
-      <h1>Hello World</h1>
+      <h1>Hello Team StackStorm</h1>
     </main>
   );
 }
