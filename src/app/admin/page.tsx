@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Header } from "@/components/layout/Header";
 import { Spinner } from "@/components/ui/Spinner";
@@ -22,21 +22,27 @@ function AdminInner() {
 
   const fetchAll = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("users").select("*").order("created_at");
-    if (error) setError(error.message);
-    else setUsers((data ?? []) as User[]);
-    setLoading(false);
+    try {
+      const data = await api.get<User[]>("/api/users");
+      setUsers(data);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Hata");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateRole = async (id: string, role: Role) => {
     setUpdatingId(id);
-    const { error } = await supabase.from("users").update({ role }).eq("id", id);
-    setUpdatingId(null);
-    if (error) {
-      alert(`Hata: ${error.message}`);
-      return;
+    try {
+      const updated = await api.patch<User>(`/api/users/${id}`, { role });
+      setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+    } catch (e) {
+      alert(`Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
+    } finally {
+      setUpdatingId(null);
     }
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)));
   };
 
   return (

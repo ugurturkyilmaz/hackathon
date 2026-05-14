@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import type { RetroSession, SessionStatus } from "@/types";
+
+interface SseSessionUpdate {
+  type: "session:update";
+  session: RetroSession;
+}
 
 export function useRetroSession(sessionId: string | null) {
   const [session, setSession] = useState<RetroSession | null>(null);
@@ -17,50 +21,43 @@ export function useRetroSession(sessionId: string | null) {
     }
 
     let cancelled = false;
-    let channel: RealtimeChannel | null = null;
+    let es: EventSource | null = null;
 
     setLoading(true);
-    supabase
-      .from("retro_sessions")
-      .select("*")
-      .eq("id", sessionId)
-      .single()
-      .then(({ data, error }) => {
+    api
+      .get<RetroSession>(`/api/sessions/${sessionId}`)
+      .then((data) => {
         if (cancelled) return;
-        if (error) setError(error.message);
-        else setSession(data as RetroSession);
+        setSession(data);
+        setLoading(false);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        setError(e.message);
         setLoading(false);
       });
 
-    channel = supabase
-      .channel(`session:${sessionId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "retro_sessions",
-          filter: `id=eq.${sessionId}`,
-        },
-        (payload) => {
-          setSession(payload.new as RetroSession);
-        },
-      )
-      .subscribe();
+    es = new EventSource(`/api/sessions/${sessionId}/stream`);
+    es.addEventListener("message", (ev) => {
+      try {
+        const payload = JSON.parse((ev as MessageEvent).data) as SseSessionUpdate | { type: string };
+        if (payload.type === "session:update") {
+          setSession((payload as SseSessionUpdate).session);
+        }
+      } catch {
+        // ignore
+      }
+    });
 
     return () => {
       cancelled = true;
-      if (channel) supabase.removeChannel(channel);
+      es?.close();
     };
   }, [sessionId]);
 
   const updateStatus = async (next: SessionStatus) => {
     if (!sessionId) return;
-    const { error } = await supabase
-      .from("retro_sessions")
-      .update({ status: next })
-      .eq("id", sessionId);
-    if (error) throw error;
+    await api.patch(`/api/sessions/${sessionId}`, { status: next });
   };
 
   return { session, loading, error, updateStatus };

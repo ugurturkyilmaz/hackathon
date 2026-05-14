@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { ROLE_LABEL } from "@/lib/utils/constants";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
-import type { Role } from "@/types";
+import type { Role, User } from "@/types";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,34 +33,9 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { data: existing } = await supabase
-        .from("users")
-        .select("*")
-        .eq("name", trimmed)
-        .maybeSingle();
-
-      let saved = existing;
-      if (!saved) {
-        const { data, error: insertError } = await supabase
-          .from("users")
-          .insert({ name: trimmed, role })
-          .select()
-          .single();
-        if (insertError) throw insertError;
-        saved = data;
-      } else if (saved.role !== role) {
-        const { data, error: updateError } = await supabase
-          .from("users")
-          .update({ role })
-          .eq("id", saved.id)
-          .select()
-          .single();
-        if (updateError) throw updateError;
-        saved = data;
-      }
-
-      signIn({ id: saved.id, name: saved.name, role: saved.role as Role });
-      redirectByRole(saved.role as Role, router);
+      const saved = await api.post<User>("/api/users", { name: trimmed, role });
+      signIn({ id: saved.id, name: saved.name, role: saved.role });
+      redirectByRole(saved.role, router);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Bir hata oluştu");
     } finally {

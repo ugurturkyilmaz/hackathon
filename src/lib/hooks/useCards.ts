@@ -1,9 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import type { Card, Category } from "@/types";
+
+interface CardInsert {
+  type: "card:insert";
+  card: Card;
+}
+interface CardUpdate {
+  type: "card:update";
+  card: Card;
+}
 
 export function useCards(sessionId: string | null) {
   const [cards, setCards] = useState<Card[]>([]);
@@ -18,91 +26,58 @@ export function useCards(sessionId: string | null) {
     }
 
     let cancelled = false;
-    let channel: RealtimeChannel | null = null;
+    let es: EventSource | null = null;
 
     setLoading(true);
-    supabase
-      .from("cards")
-      .select("*")
-      .eq("session_id", sessionId)
-      .order("created_at", { ascending: true })
-      .then(({ data, error }) => {
+    api
+      .get<Card[]>(`/api/sessions/${sessionId}/cards`)
+      .then((data) => {
         if (cancelled) return;
-        if (error) setError(error.message);
-        else setCards((data ?? []) as Card[]);
+        setCards(data);
+        setLoading(false);
+      })
+      .catch((e: Error) => {
+        if (cancelled) return;
+        setError(e.message);
         setLoading(false);
       });
 
-    channel = supabase
-      .channel(`cards:${sessionId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "cards",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const newCard = payload.new as Card;
-          setCards((prev) => (prev.some((c) => c.id === newCard.id) ? prev : [...prev, newCard]));
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "cards",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const updated = payload.new as Card;
-          setCards((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "cards",
-          filter: `session_id=eq.${sessionId}`,
-        },
-        (payload) => {
-          const oldId = (payload.old as { id: string }).id;
-          setCards((prev) => prev.filter((c) => c.id !== oldId));
-        },
-      )
-      .subscribe();
+    es = new EventSource(`/api/sessions/${sessionId}/stream`);
+    es.addEventListener("message", (ev) => {
+      try {
+        const payload = JSON.parse((ev as MessageEvent).data) as
+          | CardInsert
+          | CardUpdate
+          | { type: string };
+        if (payload.type === "card:insert") {
+          const incoming = (payload as CardInsert).card;
+          setCards((prev) => (prev.some((c) => c.id === incoming.id) ? prev : [...prev, incoming]));
+        } else if (payload.type === "card:update") {
+          const incoming = (payload as CardUpdate).card;
+          setCards((prev) => prev.map((c) => (c.id === incoming.id ? incoming : c)));
+        }
+      } catch {
+        // ignore
+      }
+    });
 
     return () => {
       cancelled = true;
-      if (channel) supabase.removeChannel(channel);
+      es?.close();
     };
   }, [sessionId]);
 
   const addCard = async (text: string, category: Category, userId?: string | null) => {
     if (!sessionId) return;
-    const { error } = await supabase.from("cards").insert({
-      session_id: sessionId,
+    await api.post(`/api/sessions/${sessionId}/cards`, {
       text,
       category,
       user_id: userId ?? null,
     });
-    if (error) throw error;
   };
 
   const voteCard = async (cardId: string) => {
-    const { data, error: fetchErr } = await supabase
-      .from("cards")
-      .select("votes")
-      .eq("id", cardId)
-      .single();
-    if (fetchErr || !data) return;
-    const newVotes = (data.votes ?? 0) + 1;
-    const { error } = await supabase.from("cards").update({ votes: newVotes }).eq("id", cardId);
-    if (error) throw error;
+    await api.post(`/api/cards/${cardId}/vote`, {});
   };
 
   return { cards, loading, error, addCard, voteCard };

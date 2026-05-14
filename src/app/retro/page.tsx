@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Header } from "@/components/layout/Header";
@@ -20,15 +20,14 @@ function RetroListInner() {
 
   useEffect(() => {
     setLoading(true);
-    supabase
-      .from("retro_sessions")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (error) setError(error.message);
-        else setSessions((data ?? []) as RetroSession[]);
-        setLoading(false);
-      });
+    api
+      .get<RetroSession[]>("/api/sessions")
+      .then((data) => {
+        setSessions(data);
+        setError(null);
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoading(false));
   }, []);
 
   const isSm = user?.role === "scrum_master" || user?.role === "admin";

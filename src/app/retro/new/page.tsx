@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { api } from "@/lib/api";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import type { RetroSession } from "@/types";
 
 function NewRetroInner() {
   const router = useRouter();
@@ -26,17 +27,12 @@ function NewRetroInner() {
     setSubmitting(true);
     setError(null);
     try {
-      const { data, error } = await supabase
-        .from("retro_sessions")
-        .insert({
-          name: trimmed,
-          vote_limit: voteLimit,
-          created_by: user?.id ?? null,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      router.replace(`/retro/${data.id}`);
+      const created = await api.post<RetroSession>("/api/sessions", {
+        name: trimmed,
+        vote_limit: voteLimit,
+        created_by: user?.id ?? null,
+      });
+      router.replace(`/retro/${created.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Hata");
       setSubmitting(false);
