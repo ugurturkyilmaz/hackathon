@@ -1,35 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import type { RetroSession } from "@/types";
+import { Input, Select } from "@/components/ui/Input";
+import type { RetroSession, TeamWithMembers } from "@/types";
 
 function NewRetroInner() {
   const router = useRouter();
   const { user } = useCurrentUser();
   const [name, setName] = useState("");
   const [voteLimit, setVoteLimit] = useState(3);
+  const [writingMinutes, setWritingMinutes] = useState(5);
+  const [teamId, setTeamId] = useState<string>("");
+  const [teams, setTeams] = useState<TeamWithMembers[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    api
+      .get<TeamWithMembers[]>("/api/teams")
+      .then((data) => {
+        setTeams(data);
+        // SM ise kendi ekibini auto-select
+        if (user?.role === "scrum_master") {
+          const own = data.find((t) => t.scrum_master_id === user.id);
+          if (own) setTeamId(own.id);
+        } else if (data.length === 1) {
+          setTeamId(data[0].id);
+        }
+      })
+      .catch(() => setTeams([]))
+      .finally(() => setLoadingTeams(false));
+  }, [user]);
+
   const submit = async () => {
     const trimmed = name.trim();
-    if (!trimmed) {
-      setError("Oturum adı boş olamaz");
-      return;
-    }
+    if (!trimmed) return setError("Oturum adı boş olamaz");
+    if (!teamId) return setError("Ekip seçmelisin");
     setSubmitting(true);
     setError(null);
     try {
       const created = await api.post<RetroSession>("/api/sessions", {
         name: trimmed,
         vote_limit: voteLimit,
+        writing_minutes: writingMinutes,
+        team_id: teamId,
         created_by: user?.id ?? null,
       });
       router.replace(`/retro/${created.id}`);
@@ -38,6 +59,12 @@ function NewRetroInner() {
       setSubmitting(false);
     }
   };
+
+  // SM yalnızca kendi ekibini görsün
+  const visibleTeams =
+    user?.role === "admin"
+      ? teams
+      : teams.filter((t) => t.scrum_master_id === user?.id);
 
   return (
     <div className="max-w-md mx-auto px-4 py-6">
@@ -58,16 +85,55 @@ function NewRetroInner() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Kişi başı oy limiti
-          </label>
-          <Input
-            type="number"
-            min={1}
-            max={10}
-            value={voteLimit}
-            onChange={(e) => setVoteLimit(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
-          />
+          <label className="block text-sm font-medium text-gray-700 mb-1">Ekip</label>
+          <Select
+            value={teamId}
+            onChange={(e) => setTeamId(e.target.value)}
+            disabled={loadingTeams}
+          >
+            <option value="">— Ekip seç —</option>
+            {visibleTeams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.members.length} üye)
+              </option>
+            ))}
+          </Select>
+          {!loadingTeams && visibleTeams.length === 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded mt-2 p-2">
+              {user?.role === "admin"
+                ? "Henüz ekip yok. Admin → Ekipler sayfasından oluştur."
+                : "Sana atanmış bir ekip yok. Admin'den ekibe atanmanı iste."}
+            </p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Yazma süresi (dk)
+            </label>
+            <Input
+              type="number"
+              min={1}
+              max={30}
+              value={writingMinutes}
+              onChange={(e) =>
+                setWritingMinutes(Math.max(1, Math.min(30, Number(e.target.value) || 1)))
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Oy limiti</label>
+            <Input
+              type="number"
+              min={1}
+              max={10}
+              value={voteLimit}
+              onChange={(e) =>
+                setVoteLimit(Math.max(1, Math.min(10, Number(e.target.value) || 1)))
+              }
+            />
+          </div>
         </div>
 
         {error && (

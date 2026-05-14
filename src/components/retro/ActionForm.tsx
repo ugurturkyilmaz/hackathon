@@ -5,14 +5,15 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { useActions, useSessionMembers } from "@/lib/hooks/useActions";
-import type { Card } from "@/types";
+import type { Card, CardGroup } from "@/types";
 
 interface Props {
-  card: Card;
+  card?: Card;
+  group?: { group: CardGroup; cards: Card[] };
   onClose: () => void;
 }
 
-export function ActionForm({ card, onClose }: Props) {
+export function ActionForm({ card, group, onClose }: Props) {
   const { addAction } = useActions();
   const members = useSessionMembers();
   const [description, setDescription] = useState("");
@@ -31,7 +32,8 @@ export function ActionForm({ card, onClose }: Props) {
     setError(null);
     try {
       await addAction({
-        card_id: card.id,
+        card_id: card?.id ?? null,
+        group_id: group?.group.id ?? null,
         assigned_to: assignedTo || null,
         description: desc,
         deadline: deadline || null,
@@ -48,9 +50,24 @@ export function ActionForm({ card, onClose }: Props) {
 
   return (
     <Modal open onClose={onClose} title="Aksiyon Ekle">
-      <p className="text-sm text-gray-600 mb-4">
-        Kart: <em>"{card.text}"</em>
-      </p>
+      {card && (
+        <p className="text-sm text-gray-600 mb-4">
+          Kart: <em>"{card.text}"</em>
+        </p>
+      )}
+      {group && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+          <p className="text-sm font-semibold text-purple-900">📦 {group.group.name}</p>
+          <ul className="mt-1 text-xs text-purple-800 space-y-0.5">
+            {group.cards.slice(0, 5).map((c) => (
+              <li key={c.id}>• {c.text}</li>
+            ))}
+            {group.cards.length > 5 && (
+              <li className="italic">+{group.cards.length - 5} daha</li>
+            )}
+          </ul>
+        </div>
+      )}
 
       <div className="space-y-4">
         <div>

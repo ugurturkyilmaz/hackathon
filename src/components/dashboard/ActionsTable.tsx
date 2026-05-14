@@ -40,7 +40,7 @@ export function ActionsTable({ actions, canMarkDone, onMarkDone }: Props) {
       <Empty
         icon="✅"
         title="Henüz aksiyon yok"
-        description="Retro oturumlarındaki kartlardan aksiyon oluşturulduğunda burada listelenecek."
+        description="Retro oturumlarındaki kartlardan veya gruplardan aksiyon oluşturulduğunda burada listelenecek."
       />
     );
   }
@@ -65,7 +65,7 @@ export function ActionsTable({ actions, canMarkDone, onMarkDone }: Props) {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-gray-600 text-xs uppercase tracking-wide">
               <tr>
-                <th className="px-4 py-3 text-left">Kart</th>
+                <th className="px-4 py-3 text-left">Kaynak</th>
                 <th className="px-4 py-3 text-left">Aksiyon</th>
                 <th className="px-4 py-3 text-left">Sorumlu</th>
                 <th className="px-4 py-3 text-left">Deadline</th>
@@ -80,13 +80,28 @@ export function ActionsTable({ actions, canMarkDone, onMarkDone }: Props) {
                 const meta = cat ? CATEGORY_META[cat] : null;
                 return (
                   <tr key={a.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      {meta && (
-                        <span className={`inline-block text-xs px-2 py-0.5 rounded-full mr-1 ${meta.chip}`}>
-                          {cat}
-                        </span>
+                    <td className="px-4 py-3 max-w-xs">
+                      {a.group ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 self-start">
+                            📦 {a.group.name}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {a.group.card_count} kart
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-1.5">
+                          {meta && (
+                            <span
+                              className={`inline-block text-xs px-2 py-0.5 rounded-full ${meta.chip}`}
+                            >
+                              {cat}
+                            </span>
+                          )}
+                          <span className="text-gray-900 text-xs">{a.card?.text ?? "—"}</span>
+                        </div>
                       )}
-                      <span className="text-gray-900">{a.card?.text ?? "—"}</span>
                     </td>
                     <td className="px-4 py-3 text-gray-900">{a.description}</td>
                     <td className="px-4 py-3 text-gray-700">{a.assignee?.name ?? "—"}</td>

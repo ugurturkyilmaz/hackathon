@@ -1,17 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CardColumn } from "./CardColumn";
 import { ActionForm } from "./ActionForm";
+import { GroupingPanel } from "./GroupingPanel";
 import { useCards } from "@/lib/hooks/useCards";
 import { useVoting } from "@/lib/hooks/useVoting";
+import { useGroups } from "@/lib/hooks/useGroups";
 import { Spinner } from "@/components/ui/Spinner";
 import { Empty } from "@/components/ui/Empty";
-import type { Card, Category, RetroSession, Role } from "@/types";
+import type { Card, CardGroup, Category, RetroSession, Role } from "@/types";
 
 interface Props {
   session: RetroSession;
   currentUser: { id: string; role: Role };
+}
+
+interface ActionTarget {
+  card?: Card;
+  group?: { group: CardGroup; cards: Card[] };
 }
 
 export function RetroBoard({ session, currentUser }: Props) {
@@ -20,10 +27,33 @@ export function RetroBoard({ session, currentUser }: Props) {
     session.id,
     session.vote_limit,
   );
-  const [actionModalCard, setActionModalCard] = useState<Card | null>(null);
+  const { groups, createGroup, deleteGroup } = useGroups(session.id);
+
+  const [actionTarget, setActionTarget] = useState<ActionTarget | null>(null);
+  const [groupingMode, setGroupingMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const canCreateAction = currentUser.role === "scrum_master" || currentUser.role === "admin";
   const canWriteOrVote = currentUser.role === "scrum_master" || currentUser.role === "member";
+  const canGroup =
+    session.status === "finished" &&
+    (currentUser.role === "scrum_master" || currentUser.role === "admin");
+
+  const groupsById = useMemo(() => {
+    const map: Record<string, CardGroup> = {};
+    for (const g of groups) map[g.id] = g;
+    return map;
+  }, [groups]);
+
+  const cardsByGroup = useMemo(() => {
+    const map: Record<string, Card[]> = {};
+    for (const c of cards) {
+      if (c.group_id) {
+        (map[c.group_id] ||= []).push(c);
+      }
+    }
+    return map;
+  }, [cards]);
 
   const onAdd = async (text: string, category: Category) => {
     await addCard(text, category, currentUser.id);
@@ -33,6 +63,15 @@ export function RetroBoard({ session, currentUser }: Props) {
     if (!canVote || !canWriteOrVote) return;
     await voteCard(cardId);
     recordVote(cardId);
+  };
+
+  const onToggleSelect = (cardId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(cardId)) next.delete(cardId);
+      else next.add(cardId);
+      return next;
+    });
   };
 
   if (loading) {
@@ -52,9 +91,16 @@ export function RetroBoard({ session, currentUser }: Props) {
   }
 
   const cats: Category[] = ["mad", "glad", "sad"];
+  const selectedCards = cards.filter((c) => selectedIds.has(c.id));
 
   return (
     <div className="space-y-4">
+      {session.status === "writing" && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-sm">
+          Yazma aşaması — başkalarının kartları oylama açılana kadar bulanık görünür.
+        </div>
+      )}
+
       {session.status === "voting" && canWriteOrVote && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm flex items-center justify-between">
           <span>
@@ -71,8 +117,29 @@ export function RetroBoard({ session, currentUser }: Props) {
 
       {session.status === "finished" && (
         <div className="bg-gray-100 border border-gray-200 text-gray-700 rounded-lg p-3 text-sm">
-          Bu retro tamamlandı. Aksiyonlar dashboard'da görünüyor.
+          Bu retro tamamlandı. Tüm kartlar herkese açık.
         </div>
+      )}
+
+      {canGroup && (
+        <GroupingPanel
+          groupingMode={groupingMode}
+          onToggleMode={() => {
+            setGroupingMode((v) => !v);
+            setSelectedIds(new Set());
+          }}
+          selectedCards={selectedCards}
+          groups={groups}
+          cardsByGroup={cardsByGroup}
+          onCreateGroup={createGroup}
+          onDeleteGroup={deleteGroup}
+          onCreateGroupAction={(g) =>
+            setActionTarget({
+              group: { group: g, cards: cardsByGroup[g.id] ?? [] },
+            })
+          }
+          onClearSelection={() => setSelectedIds(new Set())}
+        />
       )}
 
       {cards.length === 0 && session.status !== "writing" ? (
@@ -89,21 +156,27 @@ export function RetroBoard({ session, currentUser }: Props) {
               category={cat}
               cards={cards.filter((c) => c.category === cat)}
               status={session.status}
+              currentUserId={currentUser.id}
               canVote={canVote && canWriteOrVote}
               myVotes={myVotes}
               canCreateAction={canCreateAction}
+              groupingMode={groupingMode}
+              selectedIds={selectedIds}
+              groupsById={groupsById}
               onAdd={onAdd}
               onVote={onVote}
-              onCreateAction={(card) => setActionModalCard(card)}
+              onCreateAction={(card) => setActionTarget({ card })}
+              onToggleSelect={onToggleSelect}
             />
           ))}
         </div>
       )}
 
-      {actionModalCard && (
+      {actionTarget && (
         <ActionForm
-          card={actionModalCard}
-          onClose={() => setActionModalCard(null)}
+          card={actionTarget.card}
+          group={actionTarget.group}
+          onClose={() => setActionTarget(null)}
         />
       )}
     </div>

@@ -31,7 +31,8 @@ export function useActions() {
   }, [fetchAll]);
 
   const addAction = async (input: {
-    card_id: string;
+    card_id: string | null;
+    group_id: string | null;
     assigned_to: string | null;
     description: string;
     deadline: string | null;

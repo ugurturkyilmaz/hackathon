@@ -10,25 +10,30 @@ import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Empty } from "@/components/ui/Empty";
 import { STATUS_BADGE, STATUS_LABEL } from "@/lib/utils/constants";
-import type { RetroSession } from "@/types";
+import type { RetroSessionWithTeam } from "@/types";
 
 function RetroListInner() {
   const { user } = useCurrentUser();
-  const [sessions, setSessions] = useState<RetroSession[]>([]);
+  const [sessions, setSessions] = useState<RetroSessionWithTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!user) return;
     setLoading(true);
+    const url =
+      user.role === "admin" || user.role === "manager"
+        ? "/api/sessions?all=1"
+        : `/api/sessions?for_user=${user.id}`;
     api
-      .get<RetroSession[]>("/api/sessions")
+      .get<RetroSessionWithTeam[]>(url)
       .then((data) => {
         setSessions(data);
         setError(null);
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   const isSm = user?.role === "scrum_master" || user?.role === "admin";
 
@@ -37,7 +42,11 @@ function RetroListInner() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Retro Oturumları</h1>
-          <p className="text-sm text-gray-500">Aktif ve tamamlanmış retrospektifler.</p>
+          <p className="text-sm text-gray-500">
+            {user?.role === "admin" || user?.role === "manager"
+              ? "Tüm ekiplerin oturumları."
+              : "Ekibinin aktif ve tamamlanmış retrospektifleri."}
+          </p>
         </div>
         {isSm && (
           <Link href="/retro/new">
@@ -62,7 +71,7 @@ function RetroListInner() {
           title="Henüz retro oturumu yok"
           description={
             isSm
-              ? "İlk oturumu oluşturarak başla."
+              ? "Ekibin için ilk oturumu oluştur."
               : "Bir Scrum Master oturum açtığında burada görünecek."
           }
           action={
@@ -92,7 +101,8 @@ function RetroListInner() {
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Oy limiti: {s.vote_limit} ·{" "}
+                {s.team_name && <>Ekip: <strong>{s.team_name}</strong> · </>}
+                Oy: {s.vote_limit} · Yazma: {s.writing_minutes}dk ·{" "}
                 {new Date(s.created_at).toLocaleDateString("tr-TR")}
               </p>
             </Link>
@@ -105,7 +115,7 @@ function RetroListInner() {
 
 export default function RetroListPage() {
   return (
-    <RoleGuard allow={["scrum_master", "member", "admin"]}>
+    <RoleGuard allow={["scrum_master", "member", "admin", "manager"]}>
       <Header />
       <RetroListInner />
     </RoleGuard>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { RoleGuard } from "@/components/RoleGuard";
@@ -7,6 +8,7 @@ import { Header } from "@/components/layout/Header";
 import { Spinner } from "@/components/ui/Spinner";
 import { Empty } from "@/components/ui/Empty";
 import { Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
 import { ROLE_LABEL } from "@/lib/utils/constants";
 import type { Role, User } from "@/types";
 
@@ -47,9 +49,14 @@ function AdminInner() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Admin · Kullanıcılar</h1>
-        <p className="text-sm text-gray-500">Kullanıcılara rol ata.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Admin · Kullanıcılar</h1>
+          <p className="text-sm text-gray-500">Kullanıcılara rol ata.</p>
+        </div>
+        <Link href="/admin/teams">
+          <Button variant="secondary">→ Ekipler</Button>
+        </Link>
       </div>
 
       {loading && (
@@ -63,7 +70,11 @@ function AdminInner() {
       )}
 
       {!loading && !error && users.length === 0 && (
-        <Empty icon="👥" title="Henüz kullanıcı yok" description="Login olan ilk kullanıcı burada görünecek." />
+        <Empty
+          icon="👥"
+          title="Henüz kullanıcı yok"
+          description="Login olan ilk kullanıcı burada görünecek."
+        />
       )}
 
       {!loading && users.length > 0 && (
