@@ -9,6 +9,7 @@ import { useVoting } from "@/lib/hooks/useVoting";
 import { useGroups } from "@/lib/hooks/useGroups";
 import { Spinner } from "@/components/ui/Spinner";
 import { Empty } from "@/components/ui/Empty";
+import { PreviousActionsPanel } from "./PreviousActionsPanel";
 import type { Card, CardGroup, Category, RetroSession, Role } from "@/types";
 
 interface Props {
@@ -95,6 +96,8 @@ export function RetroBoard({ session, currentUser }: Props) {
 
   return (
     <div className="space-y-4">
+      {session.status === "writing" && <PreviousActionsPanel sessionId={session.id} />}
+
       {session.status === "writing" && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-3 text-sm">
           Yazma aşaması — başkalarının kartları oylama açılana kadar bulanık görünür.

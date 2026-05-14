@@ -427,3 +427,104 @@ export function updateActionStatus(id: string, status: ActionStatus): Action | u
   db.prepare(`UPDATE actions SET status = ? WHERE id = ?`).run(status, id);
   return db.prepare(`SELECT * FROM actions WHERE id = ?`).get(id) as Action | undefined;
 }
+
+// Returns all actions belonging to the most recent prior session of the
+// given session's team. Used to show "previous retro's actions" before
+// new cards are written.
+export function listPreviousSessionActions(currentSessionId: string): {
+  previousSession: { id: string; name: string; created_at: string } | null;
+  actions: ActionWithContext[];
+} {
+  const db = getDb();
+  const prev = db
+    .prepare(
+      `SELECT s.id, s.name, s.created_at
+       FROM retro_sessions s
+       WHERE s.team_id = (SELECT team_id FROM retro_sessions WHERE id = ?)
+         AND s.id != ?
+         AND s.created_at < (SELECT created_at FROM retro_sessions WHERE id = ?)
+       ORDER BY s.created_at DESC
+       LIMIT 1`,
+    )
+    .get(currentSessionId, currentSessionId, currentSessionId) as
+    | { id: string; name: string; created_at: string }
+    | undefined;
+
+  if (!prev) return { previousSession: null, actions: [] };
+
+  const rows = db
+    .prepare(
+      `SELECT
+         a.id, a.card_id, a.group_id, a.assigned_to, a.description, a.status, a.deadline, a.created_at,
+         c.text AS card_text, c.category AS card_category, c.session_id AS card_session_id,
+         g.name AS group_name, g.session_id AS group_session_id,
+         u.name AS assignee_name
+       FROM actions a
+       LEFT JOIN cards c       ON a.card_id = c.id
+       LEFT JOIN card_groups g ON a.group_id = g.id
+       LEFT JOIN users u       ON a.assigned_to = u.id
+       WHERE COALESCE(c.session_id, g.session_id) = ?
+       ORDER BY a.created_at DESC`,
+    )
+    .all(prev.id) as Array<{
+      id: string;
+      card_id: string | null;
+      group_id: string | null;
+      assigned_to: string | null;
+      description: string;
+      status: ActionStatus;
+      deadline: string | null;
+      created_at: string;
+      card_text: string | null;
+      card_category: Category | null;
+      card_session_id: string | null;
+      group_name: string | null;
+      group_session_id: string | null;
+      assignee_name: string | null;
+    }>;
+
+  // group counts
+  const groupIds = Array.from(
+    new Set(rows.map((r) => r.group_id).filter((x): x is string => x !== null)),
+  );
+  const groupCountMap = new Map<string, number>();
+  if (groupIds.length) {
+    const placeholders = groupIds.map(() => "?").join(",");
+    const cRows = db
+      .prepare(
+        `SELECT group_id, COUNT(*) AS n FROM cards WHERE group_id IN (${placeholders}) GROUP BY group_id`,
+      )
+      .all(...groupIds) as Array<{ group_id: string; n: number }>;
+    for (const c of cRows) groupCountMap.set(c.group_id, c.n);
+  }
+
+  return {
+    previousSession: prev,
+    actions: rows.map((r) => ({
+      id: r.id,
+      card_id: r.card_id,
+      group_id: r.group_id,
+      assigned_to: r.assigned_to,
+      description: r.description,
+      status: r.status,
+      deadline: r.deadline,
+      created_at: r.created_at,
+      card: r.card_text
+        ? {
+            text: r.card_text,
+            category: r.card_category as Category,
+            session_id: r.card_session_id as string,
+          }
+        : null,
+      group: r.group_name
+        ? {
+            name: r.group_name,
+            card_count: groupCountMap.get(r.group_id as string) ?? 0,
+            session_id: r.group_session_id as string,
+          }
+        : null,
+      session: { name: prev.name },
+      assignee: r.assignee_name ? { name: r.assignee_name } : null,
+    })),
+  };
+}

@@ -47,6 +47,24 @@ function AdminInner() {
     }
   };
 
+  const resetSeed = async () => {
+    if (
+      !confirm(
+        "TÜM verileri silip demo kullanıcılarını yükle?\nBu işlem geri alınamaz.",
+      )
+    )
+      return;
+    try {
+      const res = await fetch("/api/admin/seed", { method: "POST" });
+      if (!res.ok) throw new Error("seed başarısız");
+      const body = (await res.json()) as { users: number };
+      alert(`✅ Sıfırlandı, ${body.users} kullanıcı oluştu.`);
+      fetchAll();
+    } catch (e) {
+      alert(`Hata: ${e instanceof Error ? e.message : "bilinmeyen"}`);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -54,9 +72,14 @@ function AdminInner() {
           <h1 className="text-2xl font-bold tracking-tight">Admin · Kullanıcılar</h1>
           <p className="text-sm text-gray-500">Kullanıcılara rol ata.</p>
         </div>
-        <Link href="/admin/teams">
-          <Button variant="secondary">→ Ekipler</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={resetSeed} title="DB'yi sıfırla ve demo kullanıcıları yükle">
+            🔄 Reset & Seed
+          </Button>
+          <Link href="/admin/teams">
+            <Button variant="secondary">→ Ekipler</Button>
+          </Link>
+        </div>
       </div>
 
       {loading && (

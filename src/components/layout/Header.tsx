@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/lib/hooks/useCurrentUser";
 import { ROLE_LABEL } from "@/lib/utils/constants";
 import { Button } from "@/components/ui/Button";
+import { ActionAlerts } from "@/components/ActionAlerts";
 
 export function Header() {
   const { user, signOut } = useCurrentUser();
@@ -32,6 +33,7 @@ export function Header() {
           <span>Retroflow</span>
         </Link>
         <div className="flex items-center gap-3">
+          <ActionAlerts />
           <div className="text-right hidden sm:block">
             <div className="text-sm font-medium text-gray-900">{user.name}</div>
             <div className="text-xs text-gray-500">{ROLE_LABEL[user.role]}</div>

@@ -5,6 +5,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { useActions, useSessionMembers } from "@/lib/hooks/useActions";
+import { todayPlus } from "@/lib/utils/deadline";
 import type { Card, CardGroup } from "@/types";
 
 interface Props {
@@ -18,7 +19,8 @@ export function ActionForm({ card, group, onClose }: Props) {
   const members = useSessionMembers();
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
-  const [deadline, setDeadline] = useState("");
+  // Default deadline: today + 7 days
+  const [deadline, setDeadline] = useState(() => todayPlus(7));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
