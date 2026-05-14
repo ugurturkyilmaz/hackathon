@@ -5,6 +5,7 @@ import { useActions } from "@/lib/hooks/useActions";
 import { RoleGuard } from "@/components/RoleGuard";
 import { Header } from "@/components/layout/Header";
 import { ActionsTable } from "@/components/dashboard/ActionsTable";
+import { AiAnalysisPanel } from "@/components/dashboard/AiAnalysisPanel";
 import { Spinner } from "@/components/ui/Spinner";
 
 function DashboardInner() {
@@ -12,6 +13,8 @@ function DashboardInner() {
   const { actions, loading, error, updateStatus } = useActions();
 
   const canMarkDone = user?.role === "admin" || user?.role === "scrum_master";
+  const canAnalyze =
+    user?.role === "manager" || user?.role === "admin" || user?.role === "scrum_master";
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
@@ -21,6 +24,8 @@ function DashboardInner() {
           Tüm retrolardan çıkan aksiyonlar — gerçek zamanlı, read-only görünüm.
         </p>
       </div>
+
+      {canAnalyze && <AiAnalysisPanel />}
 
       {loading && (
         <div className="flex items-center justify-center py-16">
@@ -33,11 +38,7 @@ function DashboardInner() {
       )}
 
       {!loading && !error && (
-        <ActionsTable
-          actions={actions}
-          canMarkDone={canMarkDone}
-          onMarkDone={updateStatus}
-        />
+        <ActionsTable actions={actions} canMarkDone={canMarkDone} onMarkDone={updateStatus} />
       )}
     </div>
   );
